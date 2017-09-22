@@ -9,7 +9,7 @@ _GEOINT in Motion_ tools were written in Python and turned into an ArcGIS Toolbo
 ![](http://nga.maps.arcgis.com/sharing/rest/content/items/049209394aee4fd2af72db5a1b331bf3/data)
 
 ## Attribute Change Ranking
-Compares tables with the same name in a given polygon.  The tool will examin the total rows and compare the field's total differences and generate a set of rankings in that polygon grid for the fields. This tool should be used with feature data that does not contain unique object IDs.
+Compares tables with the same name in a given polygon.  The tool will examine the total rows and compare the field's total differences and generate a set of rankings in that polygon grid for the fields. This tool should be used with feature data that does not contain unique object IDs.
 ## Basic Data Comparison
 Compares two datasets that have the same schema based on a list of features within feature classes. Features and attributes that are being compared are taken from an excel spreadsheet.
 ## Compare Geometry By Unique ID
