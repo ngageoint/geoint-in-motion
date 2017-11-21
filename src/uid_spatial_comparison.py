@@ -81,13 +81,13 @@ def main(*argv):
             in_old = argv[1]
             unique = argv[2]
             out_db = argv[3]
-            type = argv[4]
+            t_flag = argv[4]
 
-            if type.lower() not in ['fc', 'fs', 'sdf']:
+            if t_flag.lower() not in ['fc', 'fs', 'sdf']:
                 raise Exception('Input Type Not In Accepted Options: fc | fs | sdf')
 
             else:
-                if type.lower() == 'fc':
+                if t_flag.lower() == 'fc':
 
                     scratch_gdb = arcpy.env.scratchGDB
                     dis_new_path = os.path.join(scratch_gdb, "dis_new")
@@ -108,7 +108,7 @@ def main(*argv):
                     new_sdf = arcgis.features.SpatialDataFrame.from_featureclass(dis_new)
                     old_sdf = arcgis.features.SpatialDataFrame.from_featureclass(dis_old)
 
-                elif type.lower() == 'fs':
+                elif t_flag.lower() == 'fs':
 
                     gis = arcgis.gis.GIS("pro")
 
