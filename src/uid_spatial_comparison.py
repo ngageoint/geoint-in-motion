@@ -15,17 +15,13 @@ Modified:
 Copyright: Esri
 License:
 -----------------------------------------------------------------------------"""
-import os
-import sys
 import pandas as pd
+import numpy as np
+import arcgis
 import arcpy
-from arcpy import env
-from arcpy import da
-if sys.version_info.major == 3:
-    from arcpy import mp as mapping
-else:
-    from arcpy import mapping
-from geodataset import SpatialDataFrame
+import sys
+import os
+
 #--------------------------------------------------------------------------
 class FunctionError(Exception):
     """ raised when a function fails to run """
@@ -51,64 +47,143 @@ def trace():
 def main(*argv):
     """ main driver of program """
     try:
-        fc_new = argv[0]
-        fc_old = argv[1]
-        unique_field = argv[2]
-        out_gdb = argv[3]
+        if os.path.split(sys.executable)[1] == 'ArcGISPro.exe':
 
-        #  Local Variables
-        #
-        scratchGDB = env.scratchGDB
-        dis_new = os.path.join(scratchGDB, "dis_new")
-        dis_old = os.path.join(scratchGDB, "dis_old")
-        out_fc = os.path.join(out_gdb, os.path.basename(fc_old))
-        #  Logic
-        #
-        dis_new = arcpy.Dissolve_management(in_features=fc_new,
-                                            out_feature_class=dis_new,
-                                            dissolve_field=unique_field)[0]
-        dis_old = arcpy.Dissolve_management(in_features=fc_old,
-                                            out_feature_class=dis_old,
-                                            dissolve_field=unique_field)[0]
-        fields = [unique_field, 'SHAPE@']
-        new_sdf = SpatialDataFrame.from_featureclass(dis_new, fields=[unique_field])
-        old_sdf = SpatialDataFrame.from_featureclass(dis_old, fields=[unique_field])
-        #  Find Added and Removed Features
-        #
-        unew = set(new_sdf[unique_field].unique().tolist())
-        uold = set(old_sdf[unique_field].unique().tolist())
+            # Expected Parameters
+            in_new = argv[0]
+            in_old = argv[1]
+            unique = argv[2]
+            out_db = argv[3]
+
+            scratch_gdb = arcpy.env.scratchGDB
+            dis_new_path = os.path.join(scratch_gdb, "dis_new")
+            dis_old_path = os.path.join(scratch_gdb, "dis_old")
+
+            dis_new = arcpy.Dissolve_management(
+                in_features=in_new,
+                out_feature_class=dis_new_path,
+                dissolve_field=unique
+            )[0]
+
+            dis_old = arcpy.Dissolve_management(
+                in_features=in_old,
+                out_feature_class=dis_old_path,
+                dissolve_field=unique
+            )[0]
+
+            new_sdf = arcgis.features.SpatialDataFrame.from_featureclass(dis_new)
+            old_sdf = arcgis.features.SpatialDataFrame.from_featureclass(dis_old)
+
+        else:
+
+            # Expected Parameters
+            in_new = argv[0]
+            in_old = argv[1]
+            unique = argv[2]
+            out_db = argv[3]
+            type = argv[4]
+
+            if type.lower() not in ['fc', 'fs', 'sdf']:
+                raise Exception('Input Type Not In Accepted Options: fc | fs | sdf')
+
+            else:
+                if type.lower() == 'fc':
+
+                    scratch_gdb = arcpy.env.scratchGDB
+                    dis_new_path = os.path.join(scratch_gdb, "dis_new")
+                    dis_old_path = os.path.join(scratch_gdb, "dis_old")
+
+                    dis_new = arcpy.Dissolve_management(
+                        in_features=in_new,
+                        out_feature_class=dis_new_path,
+                        dissolve_field=unique
+                    )[0]
+
+                    dis_old = arcpy.Dissolve_management(
+                        in_features=in_old,
+                        out_feature_class=dis_old_path,
+                        dissolve_field=unique
+                    )[0]
+
+                    new_sdf = arcgis.features.SpatialDataFrame.from_featureclass(dis_new)
+                    old_sdf = arcgis.features.SpatialDataFrame.from_featureclass(dis_old)
+
+                elif type.lower() == 'fs':
+
+                    gis = arcgis.gis.GIS("pro")
+
+                    new_fl = arcgis.features.FeatureLayer(in_old, gis=gis)
+                    old_fl = arcgis.features.FeatureLayer(in_old, gis=gis)
+
+                    new_sdf = arcgis.features.SpatialDataFrame.from_layer(new_fl)
+                    newcols = new_sdf.columns.get_values().tolist()
+                    new_sdf.drop([col for col in newcols if col not in [unique, 'SHAPE']], axis=1, inplace=True)
+
+                    old_sdf = arcgis.features.SpatialDataFrame.from_layer(old_fl)
+                    oldcols = old_sdf.columns.get_values().tolist()
+                    old_sdf.drop([col for col in oldcols if col not in [unique, 'SHAPE']], axis=1, inplace=True)
+
+                else:
+
+                    newcols = in_new.columns.get_values().tolist()
+                    in_new.drop([col for col in newcols if col not in [unique, 'SHAPE']], axis=1, inplace=True)
+                    new_sdf = in_new
+
+                    oldcols = in_old.columns.get_values().tolist()
+                    in_old.drop([col for col in oldcols if col not in [unique, 'SHAPE']], axis=1, inplace=True)
+                    old_sdf = in_old
+
+        # Find Added and Removed Features
+        unew = set(new_sdf[unique].unique().tolist())
+        uold = set(old_sdf[unique].unique().tolist())
+
         adds = list(unew - uold)
-        deletes = list(uold - unew)
-        old_df = old_sdf[old_sdf[unique_field].isin(deletes)].copy()
+        dels = list(uold - unew)
+
+        old_df = old_sdf[old_sdf[unique].isin(dels)].copy()
         old_df['STATUS'] = "REMOVED FEATURE"
-        new_df = new_sdf[new_sdf[unique_field].isin(adds)].copy()
+
+        new_df = new_sdf[new_sdf[unique].isin(adds)].copy()
         new_df['STATUS'] = "NEW FEATURE"
+
         # Find Geometry Differences
-        #
-        df2 = new_sdf[~new_sdf[unique_field].isin(adds)].copy()
-        df2.index = df2[unique_field]
-        df1 = old_sdf[~old_sdf[unique_field].isin(deletes)].copy()
-        df1.index = df1[unique_field]
-        ne = df1 != df2
-        ne = ne['SHAPE']
-        updated = df2[ne].copy()
-        updated['STATUS'] = "GEOMETRY MODIFIED"
-        updated.reset_index(inplace=True, drop=True)
-        del ne
-        del df1
-        del df2
+        df2 = new_sdf[~new_sdf[unique].isin(adds)].copy()
+        df2.index = df2[unique]
+
+        df1 = old_sdf[~old_sdf[unique].isin(dels)].copy()
+        df1.index = df1[unique]
+
+        # Merge DataFrames & Assert Geometry Equality
+        merged = pd.merge(df2, df1, on=[unique])
+        merged.index = merged[unique]
+        merged['STATUS'] = np.where(
+            merged['SHAPE_x'].equals(merged['SHAPE_y']),
+            'GEOMETRY CONSISTENT', 'GEOMETRY MODIFIED'
+        )
+
+        # Drop MISC Fields Created During Join - Keep SHAPE For DF2/SHAPE_X
+        merged['SHAPE'] = merged['SHAPE_x']
+        merged.drop('SHAPE_x', axis=1, inplace=True)
+        merged.drop('SHAPE_y', axis=1, inplace=True)
+        merged.drop('OBJECTID_x', axis=1, inplace=True)
+        merged.drop('OBJECTID_y', axis=1, inplace=True)
+        merged.reset_index(inplace=True, drop=True)
+
+        # Join 3 Analysis DataFrames & Export to Feature Class
+        joined = pd.concat([merged, old_df, new_df])
+        joined.reset_index(inplace=True, drop=True)
+        out_fc = joined.to_featureclass(out_db, "modifed_dataset_check")
+
+        # Cleanup
         del new_sdf
         del old_sdf
-        joined = pd.concat([updated,
-                            old_df,
-                            new_df])
-        joined.reset_index(inplace=True, drop=True)
-        del updated
         del new_df
         del old_df
-        out_fc = joined.to_featureclass(out_gdb, "modifed_dataset")
+        del merged
         del joined
-        arcpy.SetParameterAsText(4, out_fc)
+        del df1
+        del df2
+
     except arcpy.ExecuteError:
         line, filename, synerror = trace()
         arcpy.AddError("error on line: %s" % line)
@@ -129,7 +204,7 @@ def main(*argv):
         arcpy.AddError("with error message: %s" % synerror)
 #--------------------------------------------------------------------------
 if __name__ == "__main__":
-    env.overwriteOutput = True
+    arcpy.env.overwriteOutput = True
     argv = tuple(arcpy.GetParameterAsText(i)
     for i in range(arcpy.GetArgumentCount()))
     main(*argv)
