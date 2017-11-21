@@ -75,7 +75,6 @@ def main(*argv):
             old_sdf = arcgis.features.SpatialDataFrame.from_featureclass(dis_old)
 
         else:
-
             # Expected Parameters
             in_new = argv[0]
             in_old = argv[1]
@@ -110,7 +109,11 @@ def main(*argv):
 
                 elif t_flag.lower() == 'fs':
 
-                    gis = arcgis.gis.GIS("url", "username", "password")
+                    gis_url  = argv[5]
+                    username = argv[6]
+                    password = argv[7]
+
+                    gis = arcgis.gis.GIS(gis_url, username, password)
 
                     new_fl = arcgis.features.FeatureLayer(in_old, gis=gis)
                     old_fl = arcgis.features.FeatureLayer(in_old, gis=gis)
