@@ -110,7 +110,7 @@ def main(*argv):
 
                 elif t_flag.lower() == 'fs':
 
-                    gis = arcgis.gis.GIS("pro")
+                    gis = arcgis.gis.GIS("url", "username", "password")
 
                     new_fl = arcgis.features.FeatureLayer(in_old, gis=gis)
                     old_fl = arcgis.features.FeatureLayer(in_old, gis=gis)
