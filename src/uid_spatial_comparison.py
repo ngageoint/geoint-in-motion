@@ -175,7 +175,7 @@ def main(*argv):
         # Join 3 Analysis DataFrames & Export to Feature Class
         joined = pd.concat([merged, old_df, new_df])
         joined.reset_index(inplace=True, drop=True)
-        out_fc = joined.to_featureclass(out_db, "modifed_dataset_check")
+        joined.to_featureclass(out_db, "modifed_dataset_check")
 
         # Cleanup
         del new_sdf
