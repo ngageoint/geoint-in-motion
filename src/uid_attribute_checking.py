@@ -96,7 +96,7 @@ def build_information_table(db, new, old):
         cursor.insertRow(row)
         del cursor, row
 #--------------------------------------------------------------------------
-def handle_duplicates(sdf_set, unique):
+def handle_duplicates(sdf_set, unique, t_flag):
 
     len_sfd = len(sdf_set[0])
     sdf = sdf_set[0].drop_duplicates(subset=unique, keep=False)
@@ -107,9 +107,10 @@ def handle_duplicates(sdf_set, unique):
         arcpy.AddMessage(len_sfd_after)
         arcpy.AddMessage("Dropping Dublicates from Old Feature Classs")
 
-    if arcpy.Describe(sdf_set[1]).oidFieldName in sdf.columns:
-        arcpy.AddMessage("deleting oid field")
-        sdf_set[0].drop(arcpy.Describe(sdf_set[1]).oidFieldName, axis=1, inplace=True)
+    if t_flag != 'sdf':
+        if arcpy.Describe(sdf_set[1]).oidFieldName in sdf.columns:
+            arcpy.AddMessage("deleting oid field")
+            sdf_set[0].drop(arcpy.Describe(sdf_set[1]).oidFieldName, axis=1, inplace=True)
 #--------------------------------------------------------------------------
 def main(*argv):
     """ main driver of program """
@@ -146,15 +147,19 @@ def main(*argv):
                 arcpy.Delete_management(target)
 
         # Create Information Table (Overview of Differences)
-        build_information_table(out_db, in_new, in_old)
+        if t_flag!= 'sdf':
+            build_information_table(out_db, in_new, in_old)
 
-        # Create SpatialDataFrame Objects
-        old_sdf = arcgis.features.SpatialDataFrame.from_featureclass(in_old)
-        new_sdf = arcgis.features.SpatialDataFrame.from_featureclass(in_new)
+            # Create SpatialDataFrame Objects
+            old_sdf = arcgis.features.SpatialDataFrame.from_featureclass(in_old)
+            new_sdf = arcgis.features.SpatialDataFrame.from_featureclass(in_new)
+        else:
+            old_sdf=in_old
+            new_sdf=in_new
 
         # Remove Duplicate Values in old_sdf/new_sdf
         for sdf_set in [[old_sdf, in_old], [new_sdf, in_new]]:
-            handle_duplicates(sdf_set, unique)
+            handle_duplicates(sdf_set, unique, t_flag)
 
         # Find Adds, Deletes and Matching Values
         merged = pd.merge(old_sdf, new_sdf, on=[unique], how='outer', indicator=True)
