@@ -19,7 +19,6 @@ import pandas as pd
 import numpy as np
 import tempfile
 import arcgis
-import arcpy
 import time
 import sys
 import os
@@ -44,70 +43,15 @@ def trace():
     synerror = traceback.format_exc().splitlines()[-1]
     return line, __file__, synerror
 #--------------------------------------------------------------------------
-def build_information_table(db, new, old):
-    # Set Overview Differences
-    tbl = arcpy.CreateTable_management(out_path=db, out_name="InformationTable")[0]
-    array = np.array([],
-                     np.dtype([('_id', np.int32),
-                               ('OLD_COUNT', '|S25'),
-                               ('NEW_COUNT', '|S25'),
-                               ('REMOVE_FIELDS', '|S256'),
-                               ('ADDED_FIELDS', '|S256'),
-                               ('SR_OLD', '|S256'),
-                               ('SR_NEW', '|S256')])
-                     )
-
-    arcpy.da.ExtendTable(tbl, arcpy.Describe(tbl).OIDFieldName, array, "_id")
-    del array
-
-    desc_old = arcpy.Describe(old)
-    desc_new = arcpy.Describe(new)
-    fields_old = set([field.name for field in arcpy.ListFields(old)])
-    fields_new = set([field.name for field in arcpy.ListFields(new)])
-
-    # Handle Field Concatenation (Except Used for Edge Cases)
-    try:
-        row = [str(arcpy.GetCount_management(old)[0]),
-               str(arcpy.GetCount_management(new)[0]),
-               ",".join(list(fields_old - fields_new)),
-               ",".join(list(fields_new - fields_old)),
-               str(desc_old.spatialReference.factoryCode),
-               str(desc_new.spatialReference.factoryCode)
-               ]
-
-        cursor = arcpy.da.InsertCursor(
-            tbl,
-            ['OLD_COUNT', 'NEW_COUNT', 'REMOVE_FIELDS', 'ADDED_FIELDS', 'SR_OLD', 'SR_NEW']
-        )
-        cursor.insertRow(row)
-        del cursor, row
-
-    except:
-        row = [str(arcpy.GetCount_management(old)[0]),
-               str(arcpy.GetCount_management(new)[0]),
-               ' ',
-               ' ',
-               str(desc_old.spatialReference.factoryCode),
-               str(desc_new.spatialReference.factoryCode)
-               ]
-
-        cursor = arcpy.da.InsertCursor(
-            tbl,
-            ['OLD_COUNT', 'NEW_COUNT', 'REMOVE_FIELDS', 'ADDED_FIELDS', 'SR_OLD', 'SR_NEW']
-        )
-        cursor.insertRow(row)
-        del cursor, row
-#--------------------------------------------------------------------------
 def handle_duplicates(in_sdf, unique):
-    len_sfd = len(in_sdf)
-    sdf = in_sdf.drop_duplicates(subset=unique, keep=False)
-    len_sfd_after = len(sdf)
 
-    if len_sfd != len_sfd_after:
+    drop_sdf = in_sdf.drop_duplicates(subset=unique, keep=False)
+
+    if len(in_sdf) != len(drop_sdf):
         print('Dropping Duplicate Rows Based on Unique Field: {}'.format(unique))
         in_sdf.drop_duplicates(subset=unique, keep=False, inplace=True)
 #--------------------------------------------------------------------------
-def att_main(old_sdf, new_sdf, unique, gis):
+def att_run(old_sdf, new_sdf, unique, gis):
 
     # Remove Duplicate Row Based on Unique Field
     for sdf in [old_sdf, new_sdf]:
@@ -199,7 +143,7 @@ def att_main(old_sdf, new_sdf, unique, gis):
     # Return List of ArcGIS Online/Portal Items
     return [add_lyr, del_lyr, chg_lyr]
 #--------------------------------------------------------------------------
-def geo_main(old_sdf, new_sdf, unique, gis):
+def geo_run(old_sdf, new_sdf, unique, gis):
 
     # Find Added and Removed Features
     unew = set(new_sdf[unique].unique().tolist())
@@ -260,8 +204,7 @@ def geo_main(old_sdf, new_sdf, unique, gis):
 
     return spatial_lyr
 #--------------------------------------------------------------------------
-def handle_service_conversion(url_list, gis):
-
+def handle_sdf_conversion(url_list, gis):
     sdf_list = []
     for url in url_list:
         try:
@@ -276,13 +219,12 @@ def handle_service_conversion(url_list, gis):
 #--------------------------------------------------------------------------
 def eval_service_attributes(old_url, new_url, unique, gis):
 
-    old_sdf, new_sdf = handle_service_conversion([old_url, new_url], gis)
+    old_sdf, new_sdf = handle_sdf_conversion([old_url, new_url], gis)
 
-    return att_main(old_sdf, new_sdf, unique, gis)
+    return att_run(old_sdf, new_sdf, unique, gis)
 #--------------------------------------------------------------------------
 def eval_service_geometries(old_url, new_url, unique, gis):
 
-    old_sdf, new_sdf = handle_service_conversion([old_url, new_url], gis)
+    old_sdf, new_sdf = handle_sdf_conversion([old_url, new_url], gis)
 
-    return geo_main(old_sdf, new_sdf, unique, gis)
-#--------------------------------------------------------------------------
+    return geo_run(old_sdf, new_sdf, unique, gis)
